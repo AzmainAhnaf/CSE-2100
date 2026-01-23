@@ -9,8 +9,6 @@ base_url = "https://codeforces.com/api/"
 def get_userbase(lo, hi, limit):
     url = base_url + "user.ratedList?activeOnly=true&includeRetired=false"
     response = requests.get(url)
-    response.raise_for_status()
-
     data = response.json()
     idx = 0
     users = list()
@@ -41,7 +39,14 @@ def get_submissions(handle, lmt):
     url = base_url + "user.status?handle=" + handle + "&from=1&count=" + str(lmt)
     response = requests.get(url)
     data = response.json()
-    return data
+    already_exist = set()
+    ndata = list()
+    for item in data["result"]:
+        if item["verdict"] == "OK" and item["id"] not in already_exist:
+            already_exist.add(item['id'])
+            ndata.append(item)
+    return ndata
+
 
 def main():
     # Taking input handle
@@ -63,7 +68,10 @@ def main():
     print("Userbase fetched")
     print_userbase(users)
 
-    submission = get_submissions()
+    submission = get_submissions(handle, 20)
+
+    for i, item in enumerate(submission):
+        print(i + 1, item["problem"]["tags"])
     
     # Filtering out problemId
     # pid = list()
