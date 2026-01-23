@@ -34,7 +34,8 @@ def get_user(handle):
     data = response.json()
     return data
 
-# Fetch Max 'lmt' latest submission of the user 'handle'
+# Check Max 'lmt' latest submission of the user 'handle'
+# Return list of AC Submission
 def get_submissions(handle, lmt):
     url = base_url + "user.status?handle=" + handle + "&from=1&count=" + str(lmt)
     response = requests.get(url)
@@ -58,35 +59,39 @@ def main():
     users = list()
     if (data["status"] == "OK"):
         print("Handle Found")
-        print("Random Handles ranging around the inputted handles")
         rating = data["result"][0]["rating"]
-        users = get_userbase(rating - 100, rating + 100, 10)
+        print(f"Fetching Random Handles ranging [{rating - 100}, {rating + 100}]")
+        users = get_userbase(rating - 100, rating + 100, 1000)
     else:
         print(data["comment"])
         return -1
-    
+
     print("Userbase fetched")
-    print_userbase(users)
 
-    submission = get_submissions(handle, 20)
-
-    for i, item in enumerate(submission):
-        print(i + 1, item["problem"]["tags"])
+    # Getting submissions for each userbase and keeping track of count of each individual tag
+    tc = 0
+    tagcount = dict()
+    for user in users:
+        print("Processing", user[0], ", Rating: ", user[1])
+        submission = get_submissions(user[0], 500)
+        for item in submission:
+            for tag in item["problem"]["tags"]:
+                tc += 1
+                if tag in tagcount:
+                    tagcount[tag] += 1
+                else:
+                    tagcount[tag] = 1
     
-    # Filtering out problemId
-    # pid = list()
-    # for user in users:
-    #     name = user[0]
-    #     name_pid = set()
-    #     name_submissions = get_submissions(name, 10)
-    #     for submission in name_submissions["result"]:
-    #         name_pid.add(submission['id'])
-    #     pid.append(name_pid)
+    print("total tag count", tc)
+    for key in tagcount:
+        print(key, tagcount[key])
+ 
+    total = dict() # Store count of total submission of a specific tag
+    bad = dict()  # Store count of bad submission of a specific tag
+    good = dict() # Store count of good submission of a specific tag
 
-    # for problems in pid:
-    #     for problem in problems:
-    #         print(problem, end=" ")
-    #     print()
+
+    
 
 if __name__ == "__main__":
     main()
