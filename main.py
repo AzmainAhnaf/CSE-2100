@@ -54,6 +54,13 @@ def get_all_submissions(handle, lmt):
     data = response.json()
     return data["result"]
 
+def fetch_top_three_tag(item):
+    tags = item["problem"]["tags"]
+    if len(tags) < 3:
+        return tags
+    else:
+        return tags[:3]
+
 
 def main():
     # Taking input handle
@@ -83,10 +90,10 @@ def main():
     tc = 0
     tagcount = dict()
     for user in users:
-        print("Processing", user[0], ", Rating: ", user[1])
+        print(f"Processing {user[0]}, Rating: {user[1]}")
         submission = get_submissions(user[0], 10)
         for item in submission:
-            for tag in item["problem"]["tags"]:
+            for tag in fetch_top_three_tag(item):
                 tc += 1
                 if tag in tagcount:
                     tagcount[tag] += 1
@@ -102,19 +109,22 @@ def main():
     bad = dict()  # Store count of bad submission of a specific tag
     good = dict() # Store count of good submission of a specific tag
 
-    submission = get_all_submissions(handle, 500)
+    submission = get_all_submissions(handle, 20)
 
     # Filtering out submission based on accepted, and wrong verdict
+    submission_count = 0
     for item in submission:
         verdict = item["verdict"]
+        print(item["id"], verdict)
         if verdict == "COMPILATION_ERROR":
             continue
         if "rating" not in item["problem"]:
             continue
-        if item["problem"]["rating"] < rating - 150:
-            continue
         if verdict == "OK":
-            for tag in item["problem"]["tags"]:
+            if item["problem"]["rating"] < rating - 150:
+                continue
+            for tag in fetch_top_three_tag(item):
+                print(tag)
                 if tag in good:
                     good[tag] += 1
                 else:
@@ -126,8 +136,11 @@ def main():
                 if tag not in bad:
                     bad[tag] = 0
         else:
-            for tag in item["problem"]["tags"]:
-                if tag in good:
+            if item["problem"]["rating"] > rating + 200:
+                continue
+            for tag in fetch_top_three_tag(item):
+                print(tag)
+                if tag in bad:
                     bad[tag] += 1
                 else:
                     bad[tag] = 1
@@ -140,6 +153,7 @@ def main():
 
     for key in total:
         print(f"{key} Total = {total[key]}, Good = {good[key]}, Bad = {bad[key]}")
+    
     
 
 if __name__ == "__main__":
