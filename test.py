@@ -1,6 +1,5 @@
-var = dict()
+var = set()
 
-var[10] = 1
-
-for key in var:
-    print(key)
+print(10 not in var)
+var.add(10)
+print(10 not in var)

@@ -43,8 +43,8 @@ def get_submissions(handle, lmt):
     already_exist = set()
     ndata = list()
     for item in data["result"]:
-        if item["verdict"] == "OK" and item["id"] not in already_exist:
-            already_exist.add(item['id'])
+        if item["verdict"] == "OK" and item["problem"]["name"] not in already_exist:
+            already_exist.add(item['problem']["name"])
             ndata.append(item)
     return ndata
 
@@ -53,47 +53,41 @@ def get_all_submissions(handle, lmt):
     url = base_url + "user.status?handle=" + handle + "&from=1&count=" + str(lmt)
     response = requests.get(url)
     data = response.json()
-    return data["result"]
-
-# Fetch the top three tags for each problem
-def fetch_top_three_tag(item):
-    tags = item["problem"]["tags"]
-    if len(tags) < 3:
-        return tags
-    else:
-        return tags[:3]
+    ndata = list()
+    already_exist_good = set()
+    already_exist_bad = set()
+    for item in data["result"]:
+        if item["verdict"] == "COMPILATION_ERROR":
+            continue
+        if item["verdict"] == "OK" and item["problem"]["name"] not in already_exist_good:
+            already_exist_good.add(item["problem"]["name"])
+            ndata.append(item)
+        if item["verdict"] != "OK" and item["problem"]["name"] not in already_exist_bad:
+            already_exist_bad.add(item["problem"]["name"])
+            ndata.append(item)
+    return ndata
 
 # Returns a list of dictionary
 # list[0] -> total
 # list[1] -> good
 # list[2] -> bad
-# list[3] -> total considered submission
 # Count of submission categorized by tags
 def get_total_good_bad_submission(handle, lmt):
     data = get_user(handle)
     rating = data["result"][0]["rating"]
     submission = get_all_submissions(handle, lmt)
-    count = 0
 
     total = dict() # Store count of total submission of a specific tag
     bad = dict()  # Store count of bad submission of a specific tag
     good = dict() # Store count of good submission of a specific tag
 
     # Filtering out submission based on accepted, and wrong verdict
-    submission_count = 0
     for item in submission:
         verdict = item["verdict"]
-        print(item["id"], verdict)
         if verdict == "COMPILATION_ERROR":
             continue
-        if "rating" not in item["problem"]:
-            continue
         if verdict == "OK":
-            if item["problem"]["rating"] < rating - 150:
-                continue
-            count += 1
-            for tag in fetch_top_three_tag(item):
-                print(tag)
+            for tag in item["problem"]["tags"]:
                 if tag in good:
                     good[tag] += 1
                 else:
@@ -105,11 +99,7 @@ def get_total_good_bad_submission(handle, lmt):
                 if tag not in bad:
                     bad[tag] = 0
         else:
-            if item["problem"]["rating"] > rating + 200:
-                continue
-            count += 1
-            for tag in fetch_top_three_tag(item):
-                print(tag)
+            for tag in item["problem"]["tags"]:
                 if tag in bad:
                     bad[tag] += 1
                 else:
@@ -121,7 +111,7 @@ def get_total_good_bad_submission(handle, lmt):
                 if tag not in good:
                     good[tag] = 0
 
-    return [total, good, bad, count]
+    return [total, good, bad]
 
 def main():
     # Taking input handle
@@ -154,7 +144,7 @@ def main():
         print(f"Processing {user[0]}, Rating: {user[1]}")
         submission = get_submissions(user[0], 10)
         for item in submission:
-            for tag in fetch_top_three_tag(item):
+            for tag in item["problem"]["tags"]:
                 tc += 1
                 if tag in tagcount:
                     tagcount[tag] += 1
@@ -164,16 +154,19 @@ def main():
     # Sorting the tagcount based on frequency
     tagcount = dict(sorted(tagcount.items(), key=lambda item: item[1], reverse=True))
     
+    print("Tag Analysis")
+    print("------------")
     print("total tag count", tc)
     for key in tagcount:
         print(key, tagcount[key])
 
-    total, good, bad, count = get_total_good_bad_submission(handle, 20)
+    total, good, bad = get_total_good_bad_submission(handle, 1000)
 
+
+    print("Submission Analysis")
+    print("-------------------")
     for key in total:
         print(f"{key} Total = {total[key]}, Good = {good[key]}, Bad = {bad[key]}")
-
-    print(count)
     
     
 
