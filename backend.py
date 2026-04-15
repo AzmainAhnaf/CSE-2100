@@ -9,6 +9,32 @@ def get_userbase(lo, hi, limit):
     data = response.json()
     users = list()
     universal = data["result"]
+
+    # Binary Search for the lower bound
+    l = 0
+    r = len(universal) - 1
+    while (l < r - 1):
+        mid = (l + r) // 2
+        if universal[mid]['rating'] < lo:
+            r = mid
+        else:
+            l = mid
+    right = l
+
+    # Binary Search for the upper bound
+    l = 0
+    r = len(universal) - 1
+    while (l < r - 1):
+        mid = (l + r) // 2
+        if universal[mid]['rating'] > hi:
+            l = mid
+        else:
+            r = mid
+    left = r
+
+    # print(left, right)
+
+    universal = universal[left:right+1]
     random.shuffle(universal)
     for person in universal:
         rating = person["rating"]
@@ -66,6 +92,11 @@ def get_total_good_bad_submission(handle, lmt):
     bad = dict()
     good = dict()
 
+    # Range analysis
+    delta = (4000 - rating) // 12
+    lo = max(800, rating - delta)
+    hi = max(1000, rating + 2 * delta)
+
     for item in submission:
         verdict = item["verdict"]
         if "rating" not in item["problem"]:
@@ -74,14 +105,14 @@ def get_total_good_bad_submission(handle, lmt):
         if verdict == "COMPILATION_ERROR":
             continue
         if verdict == "OK":
-            if prob_rating <= rating - 200:
+            if prob_rating <= lo:
                 continue
             for tag in item["problem"]["tags"]:
                 good[tag] = good.get(tag, 0) + 1
                 total[tag] = total.get(tag, 0) + 1
                 bad.setdefault(tag, 0)
         else:
-            if prob_rating >= rating + 400:
+            if prob_rating >= hi:
                 continue
             for tag in item["problem"]["tags"]:
                 bad[tag] = bad.get(tag, 0) + 1
@@ -160,3 +191,12 @@ def analyze_handle(handle, progress_callback=None):
         "weak": weak,
         "nd": nd,
     }
+
+
+def debug():
+    users = get_userbase(1500, 1600, 10)
+    for user in users:
+        print(user)
+
+if __name__ == "__main__":
+    debug()

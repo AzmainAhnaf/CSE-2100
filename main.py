@@ -454,84 +454,162 @@ class App(ctk.CTk):
             label(bar_row, f"  {count}", size=10, color=SUBTEXT).pack(side="left")
 
     def _build_focus_panel(self, parent, r):
-        # Top 5 trending tags
-        top5 = [tag for tag, _ in list(r["tagcount"].items())[:5]]
+        """
+        Show top-10 trending topics that are in weak OR mid zone,
+        ordered by trending frequency, as a vertical flowchart.
+        Weak topics shown first (priority), then mid topics.
+        """
+        top10_ordered = [tag for tag, _ in list(r["tagcount"].items())[:10]]
+        weak_set = set(r["weak"])
+        mid_set  = set(r["mid"])
 
-        # Priority 1: weak topics in top 5
-        focus_topics = [(tag, "weak") for tag in r["weak"] if tag in top5]
-
-        # Priority 2: mid topics in top 5 (only if no weak found)
-        if not focus_topics:
-            focus_topics = [(tag, "mid") for tag in r["mid"] if tag in top5]
+        # Collect matching topics keeping trending order
+        weak_topics = [(tag, "weak") for tag in top10_ordered if tag in weak_set]
+        mid_topics  = [(tag, "mid")  for tag in top10_ordered if tag in mid_set]
+        focus_topics = weak_topics + mid_topics  # weak first, then mid
 
         card = make_frame(parent)
         card.pack(fill="x", pady=(12, 0))
 
-        # Header row
-        header_row = ctk.CTkFrame(card, fg_color="transparent")
-        header_row.pack(fill="x", padx=16, pady=(14, 4))
-        label(header_row, "FOCUS RECOMMENDATIONS", size=11, color=SUBTEXT).pack(side="left")
-
-        if not focus_topics:
-            # No recommendations
-            empty = ctk.CTkFrame(card, fg_color=GREY_DIM, corner_radius=8)
-            empty.pack(fill="x", padx=16, pady=(4, 14))
-            label(empty, "✓  No urgent focus areas — your trending topics are well covered!",
-                  size=12, color=GREEN).pack(padx=16, pady=12)
-            return
-
-        zone_used = focus_topics[0][1]
-        source_label = "weak zone" if zone_used == "weak" else "mid zone"
-        label(header_row,
-              f"  ·  top-5 trending ∩ {source_label}",
+        # ── Header ──
+        hdr = ctk.CTkFrame(card, fg_color="transparent")
+        hdr.pack(fill="x", padx=16, pady=(14, 4))
+        label(hdr, "FOCUS ROADMAP", size=11, color=SUBTEXT).pack(side="left")
+        label(hdr, "  ·  top-10 trending topics in weak & mid zone  ·  ordered by frequency",
               size=10, color=SUBTEXT).pack(side="left")
 
-        # Rank of each tag in trending list (for display)
+        if not focus_topics:
+            empty = ctk.CTkFrame(card, fg_color=GREY_DIM, corner_radius=8)
+            empty.pack(fill="x", padx=16, pady=(4, 14))
+            label(empty, "✓  All top-10 trending topics are in your strong zone. Keep it up!",
+                  size=12, color=GREEN).pack(padx=16, pady=14)
+            return
+
+        # ── Flowchart canvas ──
+        BOX_W    = 820   # full-width boxes
+        BOX_H    = 72
+        ARROW_H  = 28
+        PAD_X    = 16
+        PAD_Y    = 12
+        n        = len(focus_topics)
+        canvas_h = n * BOX_H + (n - 1) * ARROW_H + 2 * PAD_Y
+
         trending_rank = {tag: i+1 for i, (tag, _) in enumerate(r["tagcount"].items())}
 
-        for i, (tag, zone) in enumerate(focus_topics):
-            good  = r["good"].get(tag, 0)
-            bad   = r["bad"].get(tag, 0)
-            total = r["total"].get(tag, 0)
-            pct   = good / total * 100 if total else 0
-            rank  = trending_rank.get(tag, "?")
+        canvas_frame = ctk.CTkFrame(card, fg_color="transparent")
+        canvas_frame.pack(fill="x", padx=PAD_X, pady=(4, PAD_Y))
 
-            zone_color = RED if zone == "weak" else YELLOW
-            zone_dim   = RED_DIM if zone == "weak" else YELLOW_DIM
-            zone_text  = "Weak Zone" if zone == "weak" else "Mid Zone"
+        c = tk.Canvas(canvas_frame, height=canvas_h,
+                      bg=BG, highlightthickness=0)
+        c.pack(fill="x")
 
-            row_bg = PANEL if i % 2 == 0 else "#161921"
-            row_f = ctk.CTkFrame(card, fg_color=row_bg, corner_radius=8 if i == 0 else 0)
-            row_f.pack(fill="x", padx=16, pady=(0, 2))
+        # Dynamically get canvas width after layout
+        def _draw_flowchart(event=None):
+            c.delete("all")
+            cw = c.winfo_width() or BOX_W
 
-            # Trending rank badge
-            rank_badge = ctk.CTkFrame(row_f, fg_color=ACCENT2, corner_radius=6, width=28, height=28)
-            rank_badge.pack(side="left", padx=(10, 10), pady=10)
-            rank_badge.pack_propagate(False)
-            label(rank_badge, f"#{rank}", size=10, weight="bold", color=WHITE).place(relx=0.5, rely=0.5, anchor="center")
+            for i, (tag, zone) in enumerate(focus_topics):
+                good  = r["good"].get(tag, 0)
+                bad   = r["bad"].get(tag, 0)
+                total = r["total"].get(tag, 0)
+                pct   = good / total * 100 if total else 0
+                rank  = trending_rank.get(tag, "?")
 
-            # Topic name
-            label(row_f, tag, size=13, weight="bold", color=TEXT).pack(side="left", padx=(0, 12))
+                if zone == "weak":
+                    box_bg, box_border, zone_lbl, zone_col = RED_DIM, RED, "WEAK", RED
+                else:
+                    box_bg, box_border, zone_lbl, zone_col = YELLOW_DIM, YELLOW, "MID", YELLOW
 
-            # Zone pill
-            pill = ctk.CTkFrame(row_f, fg_color=zone_dim, corner_radius=6)
-            pill.pack(side="left", padx=(0, 14))
-            label(pill, zone_text, size=10, weight="bold", color=zone_color).pack(padx=8, pady=3)
+                x0 = 0
+                y0 = PAD_Y + i * (BOX_H + ARROW_H)
+                x1 = cw
+                y1 = y0 + BOX_H
+                mid_y = (y0 + y1) // 2
 
-            # Stats
-            stats_frame = ctk.CTkFrame(row_f, fg_color="transparent")
-            stats_frame.pack(side="right", padx=14)
-            label(stats_frame,
-                  f"✓ {good}  ✗ {bad}  ({pct:.0f}% acc)",
-                  size=11, color=SUBTEXT).pack()
+                # ── Arrow from previous ──
+                if i > 0:
+                    ay0 = y0 - ARROW_H
+                    ay1 = y0
+                    ax  = cw // 2
+                    c.create_line(ax, ay0, ax, ay1 - 2,
+                                  fill=SUBTEXT, width=2,
+                                  arrow=tk.LAST, arrowshape=(10, 13, 5))
 
-            # Mini progress bar
-            bar_frame = ctk.CTkFrame(row_f, fg_color="transparent")
-            bar_frame.pack(side="right", padx=(0, 8))
-            MiniBar(bar_frame, pct / 100, zone_color, width=100).pack(pady=2)
+                # ── Box shadow ──
+                c.create_rectangle(x0+3, y0+3, x1+3, y1+3,
+                                   fill="#06080d", outline="")
 
-        pad = ctk.CTkFrame(card, fg_color="transparent", height=12)
-        pad.pack()
+                # ── Box ──
+                c.create_rectangle(x0, y0, x1, y1,
+                                   fill=box_bg, outline=box_border, width=2)
+
+                # ── Left accent bar ──
+                c.create_rectangle(x0, y0, x0+5, y1, fill=box_border, outline="")
+
+                # ── Rank badge (left) ──
+                bx0, by0, bx1, by1 = x0+14, mid_y-14, x0+42, mid_y+14
+                c.create_oval(bx0, by0, bx1, by1, fill=ACCENT2, outline="")
+                c.create_text((bx0+bx1)//2, (by0+by1)//2,
+                               text=f"#{rank}", fill=WHITE,
+                               font=("Courier New", 10, "bold"))
+
+                # ── Topic name ──
+                c.create_text(x0+56, mid_y - 10,
+                               text=tag, fill=TEXT,
+                               font=("Courier New", 13, "bold"),
+                               anchor="w")
+
+                # ── Zone label ──
+                c.create_text(x0+56, mid_y + 10,
+                               text=zone_lbl, fill=zone_col,
+                               font=("Courier New", 9, "bold"),
+                               anchor="w")
+
+                # ── Acc% bar (right side) ──
+                bar_x0  = x1 - 220
+                bar_x1  = x1 - 20
+                bar_w   = bar_x1 - bar_x0
+                bar_mid = mid_y
+                c.create_text(bar_x0, bar_mid - 12,
+                               text=f"acc rate", fill=SUBTEXT,
+                               font=("Courier New", 8), anchor="w")
+                # Track bg
+                c.create_rectangle(bar_x0, bar_mid - 2,
+                                   bar_x1, bar_mid + 8,
+                                   fill=BORDER, outline="")
+                # Track fill
+                filled_w = int(pct / 100 * bar_w)
+                if filled_w > 0:
+                    c.create_rectangle(bar_x0, bar_mid - 2,
+                                       bar_x0 + filled_w, bar_mid + 8,
+                                       fill=zone_col, outline="")
+                # Pct label
+                c.create_text(bar_x1 + 6, bar_mid + 3,
+                               text=f"{pct:.0f}%", fill=zone_col,
+                               font=("Courier New", 10, "bold"), anchor="w")
+
+                # ── Stats (good/bad) ──
+                c.create_text(x1 - 340, mid_y,
+                               text=f"✓ {good}   ✗ {bad}",
+                               fill=SUBTEXT,
+                               font=("Courier New", 10),
+                               anchor="e")
+
+        c.bind("<Configure>", _draw_flowchart)
+        c.after(50, _draw_flowchart)
+
+        # ── Legend ──
+        leg = ctk.CTkFrame(card, fg_color="transparent")
+        leg.pack(pady=(0, 12))
+        for txt, col in [("Weak Zone — urgent focus", RED),
+                          ("Mid Zone — improvement needed", YELLOW)]:
+            row = ctk.CTkFrame(leg, fg_color="transparent")
+            row.pack(side="left", padx=16)
+            dot = tk.Canvas(row, width=10, height=10, bg=BG if False else PANEL,
+                            highlightthickness=0)
+            dot.pack(side="left", padx=(0, 5))
+            dot.create_oval(1, 1, 9, 9, fill=col, outline="")
+            label(row, txt, size=10, color=SUBTEXT).pack(side="left")
 
     def _build_submission_table(self, parent, r):
         card = make_frame(parent)
